@@ -337,10 +337,9 @@ body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-weight:3
 
 <script>
 const { createClient } = supabase;
-const sb = createClient(
-  'https://iwabxlrvlbdgufkyrtdt.supabase.co',
-  'sb_publishable_JnY3E9PKRtefe3vUMLKxJA_nQ_2k5Fr'
-);
+const SUPABASE_URL = 'https://iwabxlrvlbdgufkyrtdt.supabase.co';
+const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_JnY3E9PKRtefe3vUMLKxJA_nQ_2k5Fr';
+const sb = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 
 const postCache = {};
 
@@ -356,6 +355,85 @@ function escapeHtml(str='') {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
+}
+
+function visibleError(el, message, extra='') {
+  if (!el) return;
+  const details = extra ? `<br><small style="display:block;margin-top:.5rem;opacity:.8">${escapeHtml(extra)}</small>` : '';
+  el.innerHTML = `<p class="empty-state" style="grid-column:1/-1;padding:2rem;color:#c47a5a">${escapeHtml(message)}${details}</p>`;
+}
+
+async function rawFetch(path) {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
+    headers: {
+      apikey: SUPABASE_PUBLISHABLE_KEY,
+      Authorization: `Bearer ${SUPABASE_PUBLISHABLE_KEY}`,
+      'Content-Type': 'application/json'
+    }
+  });
+  const text = await res.text();
+  let json;
+  try { json = text ? JSON.parse(text) : null; } catch { json = text; }
+  if (!res.ok) {
+    const msg = typeof json === 'string' ? json : (json && (json.message || json.error_description) ? (json.message || json.error_description) : JSON.stringify(json));
+    throw new Error(`HTTP ${res.status}: ${msg}`);
+  }
+  return json;
+}
+
+async function fetchPosts() {
+  let clientError = null;
+  try {
+    const { data, error } = await sb.from('posts').select('*').order('published_at', { ascending: false });
+    if (error) throw error;
+    if (Array.isArray(data) && data.length) return data;
+    const { data: altData, error: altError } = await sb.from('posts').select('*').order('created_at', { ascending: false });
+    if (!altError && Array.isArray(altData) && altData.length) return altData;
+    return data || altData || [];
+  } catch (err) {
+    clientError = err;
+  }
+  try {
+    return await rawFetch('posts?select=*');
+  } catch (rawErr) {
+    throw new Error(`${clientError ? clientError.message : 'Client query failed'} | ${rawErr.message}`);
+  }
+}
+
+async function fetchPhotos() {
+  let clientError = null;
+  try {
+    const { data, error } = await sb.from('photos').select('*').order('created_at', { ascending: false });
+    if (error) throw error;
+    if (Array.isArray(data) && data.length) return data;
+    return data || [];
+  } catch (err) {
+    clientError = err;
+  }
+  try {
+    return await rawFetch('photos?select=*');
+  } catch (rawErr) {
+    throw new Error(`${clientError ? clientError.message : 'Client query failed'} | ${rawErr.message}`);
+  }
+}
+
+function normalizePost(post) {
+  return {
+    id: post.id,
+    title: post.title || 'Untitled',
+    excerpt: post.excerpt || post.summary || '',
+    content: post.content || post.body || '',
+    published_at: post.published_at || post.created_at || post.inserted_at || null
+  };
+}
+
+function normalizePhoto(photo) {
+  return {
+    id: photo.id,
+    url: photo.url || photo.image_url || photo.src || '',
+    caption: photo.caption || photo.title || '',
+    created_at: photo.created_at || photo.published_at || photo.inserted_at || null
+  };
 }
 
 function showPage(id) {
@@ -394,15 +472,16 @@ async function loadHomePosts() {
   if (el.dataset.loaded) return;
   el.innerHTML = '<p class="empty-state">Loading…</p>';
   try {
-    const { data, error } = await sb.from('posts').select('*').order('published_at',{ascending:false});
-    if (error) throw error;
-    if (!data?.length) { el.innerHTML='<p class="empty-state">No posts yet.</p>'; return; }
+    const rows = await fetchPosts();
+    const data = (rows || []).map(normalizePost).filter(p => p.id);
+    if (!data.length) { el.innerHTML='<p class="empty-state">No posts yet.</p>'; return; }
+    data.sort((a,b) => new Date(b.published_at || 0) - new Date(a.published_at || 0));
     data.forEach(p => postCache[p.id] = p);
-    el.innerHTML = data.map(p=>`<div class="post-item" onclick="openPost('${String(p.id).replace(/'/g, '&#39;')}')"><span class="post-date">${escapeHtml(fmt(p.published_at))}</span><div class="post-text"><div class="post-title-wrap"><div class="post-title">${escapeHtml(p.title || 'Untitled')}</div></div><div class="post-excerpt-wrap">${p.excerpt ? `<div class="post-excerpt">${escapeHtml(p.excerpt)}</div>` : ''}</div></div></div>`).join('');
+    el.innerHTML = data.map(p=>`<div class="post-item" onclick="openPost('${String(p.id).replace(/'/g, '&#39;')}')"><span class="post-date">${escapeHtml(fmt(p.published_at))}</span><div class="post-text"><div class="post-title-wrap"><div class="post-title">${escapeHtml(p.title)}</div></div><div class="post-excerpt-wrap">${p.excerpt ? `<div class="post-excerpt">${escapeHtml(p.excerpt)}</div>` : ''}</div></div></div>`).join('');
     el.dataset.loaded = '1';
   } catch (error) {
     console.error('loadHomePosts failed', error);
-    el.innerHTML = '<p class="empty-state">Unable to load posts right now.</p>';
+    visibleError(el, 'Unable to load posts right now.', error.message);
   }
 }
 
@@ -424,17 +503,21 @@ async function loadHomeArchive(options = {}) {
   el.setAttribute('aria-busy','true');
   el.innerHTML = '';
   try {
-    const { data, error } = await sb.from('photos').select('*').order('created_at',{ascending:false});
-    if (error) throw error;
-    if (!data?.length) { el.removeAttribute('aria-busy'); el.innerHTML='<p class="empty-state" style="grid-column:1/-1;padding:2rem">No photos yet.</p>'; return; }
-    el.innerHTML = data.map((p)=>`<div class="archive-item" onclick="openPhoto(this)" data-url="${escapeHtml(p.url || '')}" data-caption="${escapeHtml(p.caption || '')}"><img src="${escapeHtml(p.url || '')}" alt="${escapeHtml(p.caption || '')}" loading="eager" decoding="async"/><div class="archive-caption"><span>${escapeHtml(p.caption || '')}</span></div></div>`).join('');
-    el.offsetHeight;
+    const rows = await fetchPhotos();
+    const data = (rows || []).map(normalizePhoto).filter(p => p.id && p.url);
+    if (!data.length) {
+      el.removeAttribute('aria-busy');
+      el.innerHTML='<p class="empty-state" style="grid-column:1/-1;padding:2rem">No photos yet.</p>';
+      return;
+    }
+    data.sort((a,b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
+    el.innerHTML = data.map((p)=>`<div class="archive-item" onclick="openPhoto(this)" data-url="${escapeHtml(p.url)}" data-caption="${escapeHtml(p.caption)}"><img src="${escapeHtml(p.url)}" alt="${escapeHtml(p.caption)}" loading="eager" decoding="async"/><div class="archive-caption"><span>${escapeHtml(p.caption)}</span></div></div>`).join('');
     el.removeAttribute('aria-busy');
     el.dataset.loaded = '1';
   } catch (error) {
     console.error('loadHomeArchive failed', error);
     el.removeAttribute('aria-busy');
-    el.innerHTML = '<p class="empty-state" style="grid-column:1/-1;padding:2rem">Unable to load photos right now.</p>';
+    visibleError(el, 'Unable to load photos right now.', error.message);
   }
 }
 
