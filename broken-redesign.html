@@ -342,6 +342,7 @@ const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_JnY3E9PKRtefe3vUMLKxJA_nQ_2k5Fr
 const sb = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 
 const postCache = {};
+let archiveCache = [];
 
 const cursor = document.getElementById('cursor');
 document.addEventListener('mousemove', e => { if (cursor) { cursor.style.left=e.clientX+'px'; cursor.style.top=e.clientY+'px'; }});
@@ -436,6 +437,10 @@ function normalizePhoto(photo) {
   };
 }
 
+function renderArchiveGrid(el, photos) {
+  el.innerHTML = photos.map((p)=>`<div class="archive-item" onclick="openPhoto(this)" data-url="${escapeHtml(p.url)}" data-caption="${escapeHtml(p.caption)}"><img src="${escapeHtml(p.url)}" alt="${escapeHtml(p.caption)}" loading="eager" decoding="async"/><div class="archive-caption"><span>${escapeHtml(p.caption)}</span></div></div>`).join('');
+}
+
 function showPage(id) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.getElementById('page-'+id).classList.add('active');
@@ -499,19 +504,30 @@ function openPost(id) {
 async function loadHomeArchive(options = {}) {
   const el = document.getElementById('home-archive');
   const forceRefresh = Boolean(options.forceRefresh);
-  if (el.dataset.loaded && !forceRefresh) return;
-  el.setAttribute('aria-busy','true');
-  el.innerHTML = '';
+  const background = Boolean(options.background);
+  if (archiveCache.length && !forceRefresh) {
+    renderArchiveGrid(el, archiveCache);
+    el.dataset.loaded = '1';
+    el.removeAttribute('aria-busy');
+    return;
+  }
+  if (el.dataset.loaded && !forceRefresh && !background) return;
+  if (!background) {
+    el.setAttribute('aria-busy','true');
+    el.innerHTML = '';
+  }
   try {
     const rows = await fetchPhotos();
     const data = (rows || []).map(normalizePhoto).filter(p => p.id && p.url);
     if (!data.length) {
+      archiveCache = [];
       el.removeAttribute('aria-busy');
       el.innerHTML='<p class="empty-state" style="grid-column:1/-1;padding:2rem">No photos yet.</p>';
       return;
     }
     data.sort((a,b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
-    el.innerHTML = data.map((p)=>`<div class="archive-item" onclick="openPhoto(this)" data-url="${escapeHtml(p.url)}" data-caption="${escapeHtml(p.caption)}"><img src="${escapeHtml(p.url)}" alt="${escapeHtml(p.caption)}" loading="eager" decoding="async"/><div class="archive-caption"><span>${escapeHtml(p.caption)}</span></div></div>`).join('');
+    archiveCache = data;
+    renderArchiveGrid(el, data);
     el.removeAttribute('aria-busy');
     el.dataset.loaded = '1';
   } catch (error) {
@@ -673,6 +689,7 @@ async function checkRoute() {
 window.addEventListener('hashchange', checkRoute);
 checkRoute();
 loadHomePosts();
+loadHomeArchive({ background: true });
 </script>
 </body>
 </html>
