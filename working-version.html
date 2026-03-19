@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>pski</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&family=Reenie+Beanie&display=swap" rel="stylesheet" />
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#F8F7F4;--ink:#1C1B18;--ink-soft:#6B6860;--ink-faint:#B8B5AE;--rule:#E4E2DC;
+  --serif:'Cormorant Garamond',Georgia,serif;--sans:'DM Sans',system-ui,sans-serif;
+  --wordmark:'Reenie Beanie',cursive;--charcoal:#2C2925;
+  --sidebar-w:300px;
+}
+html{font-size:16px;scroll-behavior:smooth}
+body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-weight:300;-webkit-font-smoothing:antialiased;overflow-x:hidden}
+
+/* ── PAGE SYSTEM ── */
+.page{display:none}
+.page.active{display:block}
+
+/* ── SPLIT LAYOUT ── */
+.split-layout{display:grid;grid-template-columns:var(--sidebar-w) 1fr;min-height:100vh}
+
+/* ── SIDEBAR ── */
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:var(--sidebar-w);background:var(--charcoal);display:flex;flex-direction:column;padding:2.8rem 2.4rem;z-index:50;overflow-y:auto}
+.sidebar-wordmark{font-family:var(--wordmark);font-size:2.6rem;color:#F8F7F4;line-height:1;margin-bottom:2.2rem;cursor:pointer;transition:opacity .2s}
+.sidebar-wordmark:hover{opacity:.7}
+.sidebar-rule{height:1px;background:rgba(248,247,244,.1);margin-bottom:2rem}
+.sidebar-name{font-family:var(--serif);font-size:2rem;font-weight:300;line-height:1.1;color:#F8F7F4;letter-spacing:-.01em;margin-bottom:1.2rem}
+.sidebar-bio{font-size:.92rem;line-height:1.5;color:rgba(248,247,244,.85);margin-bottom:.45rem;font-weight:300;font-family:var(--serif);font-style:italic}
+.sidebar-subtext{font-size:.75rem;line-height:1.6;color:rgba(248,247,244,.38);margin-bottom:2rem;font-weight:300}
+
+/* sidebar subscribe */
+.sidebar-sub-input{width:100%;padding:.75rem .9rem;background:rgba(255,255,255,.06);border:1px solid rgba(248,247,244,.12);font-family:var(--sans);font-size:.82rem;color:#F8F7F4;outline:none;font-weight:300;margin-bottom:.6rem;transition:border-color .2s}
+.sidebar-sub-input:focus{border-color:rgba(248,247,244,.3)}
+.sidebar-sub-input::placeholder{color:rgba(248,247,244,.28)}
+.sidebar-sub-btn{width:100%;padding:.72rem;background:rgba(248,247,244,.1);border:1px solid rgba(248,247,244,.15);font-family:var(--sans);font-size:.72rem;letter-spacing:.12em;text-transform:uppercase;color:rgba(248,247,244,.8);cursor:pointer;transition:background .2s,color .2s}
+.sidebar-sub-btn:hover{background:#F8F7F4;color:var(--charcoal)}
+.sidebar-sub-msg{font-size:.75rem;min-height:1.2rem;margin-top:.5rem;color:rgba(248,247,244,.4)}
+.sidebar-sub-msg.ok{color:#7ab98a}
+.sidebar-sub-msg.err{color:#c47a5a}
+
+/* sidebar nav tabs */
+.sidebar-tabs{display:flex;gap:0;padding-bottom:1.8rem}
+.sidebar-tab{flex:1;background:none;border:none;font-family:var(--sans);font-size:.72rem;letter-spacing:.12em;text-transform:uppercase;color:rgba(248,247,244,.35);cursor:pointer;padding:.6rem 0;text-align:left;transition:color .2s;position:relative}
+.sidebar-tab::after{content:'';position:absolute;bottom:-1px;left:0;width:0;height:1px;background:#F8F7F4;transition:width .3s cubic-bezier(.22,1,.36,1)}
+.sidebar-tab.active{color:#F8F7F4}
+.sidebar-tab.active::after{width:100%}
+.sidebar-tab:hover{color:rgba(248,247,244,.7)}
+
+/* ── RIGHT PANE ── */
+.right-pane{margin-left:var(--sidebar-w);min-height:100vh;background:var(--bg)}
+.main-tab{display:none;padding:3.5rem 3.5rem 5rem}
+.main-tab.active{display:block}
+
+/* ── POSTS LIST ── */
+.posts-list{display:flex;flex-direction:column}
+.post-item{display:grid;grid-template-columns:64px 1fr;gap:0 2rem;padding:1.8rem 0;border-bottom:1px solid var(--rule);cursor:pointer;transition:opacity .2s}
+.post-item:first-child{border-top:1px solid var(--rule)}
+.post-item:hover{opacity:.45}
+.post-date{font-size:.68rem;letter-spacing:.06em;color:var(--ink-faint);padding-top:.25rem;font-variant-numeric:tabular-nums;text-transform:uppercase}
+.post-title{font-family:var(--serif);font-size:1.45rem;font-weight:400;line-height:1.2;letter-spacing:-.01em;margin-bottom:.4rem}
+.post-excerpt{font-size:.83rem;color:var(--ink-soft);line-height:1.6;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.empty-state{font-size:.82rem;color:var(--ink-faint);padding:2rem 0;border-top:1px solid var(--rule)}
+
+/* ── ARCHIVE GRID ── */
+.archive-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:3px}
+.archive-item{position:relative;aspect-ratio:1;overflow:hidden;cursor:pointer;background:var(--rule)}
+.archive-item img{width:100%;height:100%;object-fit:cover;display:block;filter:grayscale(8%);transition:transform .5s cubic-bezier(.22,1,.36,1),filter .4s}
+.archive-item:hover img{transform:scale(1.04);filter:grayscale(0%)}
+.archive-caption{position:absolute;inset:0;background:rgba(28,27,24,0);display:flex;align-items:flex-end;padding:1rem;transition:background .3s}
+.archive-item:hover .archive-caption{background:rgba(28,27,24,.55)}
+.archive-caption span{font-size:.72rem;color:#fff;letter-spacing:.05em;opacity:0;transform:translateY(4px);transition:opacity .3s,transform .3s;line-height:1.4}
+.archive-item:hover .archive-caption span{opacity:1;transform:none}
+
+/* ── LIGHTBOX ── */
+.lightbox{position:fixed;inset:0;background:rgba(28,27,24,.92);z-index:200;display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity .35s;padding:2rem;cursor:zoom-out}
+.lightbox.open{opacity:1;pointer-events:all}
+.lightbox-inner{position:relative;display:flex;flex-direction:column;align-items:center;gap:1.5rem}
+.lightbox-img{max-width:90vw;max-height:78vh;object-fit:contain;display:block}
+.lightbox-caption{font-size:.72rem;letter-spacing:.12em;color:rgba(248,247,244,.5);text-transform:uppercase}
+.lightbox-close{position:absolute;top:-2.5rem;right:0;font-size:.68rem;letter-spacing:.16em;text-transform:uppercase;color:rgba(248,247,244,.4);cursor:pointer;background:none;border:none;font-family:var(--sans);transition:color .2s}
+.lightbox-close:hover{color:#fff}
+
+/* ── SINGLE POST ── */
+.post-full-wrap{max-width:680px;margin:0 auto;padding:5rem 3rem 6rem}
+.post-full-back{font-size:.68rem;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-faint);cursor:pointer;background:none;border:none;font-family:var(--sans);margin-bottom:4rem;display:inline-flex;align-items:center;gap:.75rem;padding:.6rem 1.1rem .6rem 0;border-bottom:1px solid var(--rule);transition:all .25s}
+.post-full-back:hover{color:var(--ink);gap:1.1rem;border-bottom-color:var(--ink)}
+.post-full-date{font-size:.72rem;letter-spacing:.1em;color:var(--ink-faint);margin-bottom:1rem;text-transform:uppercase}
+.post-full-title{font-family:var(--serif);font-size:clamp(2rem,5vw,3.5rem);font-weight:300;line-height:1.1;letter-spacing:-.02em;margin-bottom:3rem}
+.post-full-content{font-size:1.05rem;line-height:1.85;color:var(--ink-soft);font-weight:300}
+.post-full-content p{margin-bottom:1.5rem}
+/* post subscribe */
+.post-subscribe{margin-top:5rem;padding-top:3rem;border-top:1px solid var(--rule)}
+.post-subscribe-title{font-family:var(--serif);font-size:1.8rem;font-weight:300;letter-spacing:-.01em;margin-bottom:.6rem}
+.post-subscribe-desc{font-size:.85rem;color:var(--ink-soft);line-height:1.6;margin-bottom:1.8rem}
+.post-subscribe-form{display:flex;max-width:420px;border:1px solid var(--ink)}
+.post-subscribe-form input{flex:1;padding:.85rem 1.1rem;background:transparent;border:none;font-family:var(--sans);font-size:.85rem;color:var(--ink);outline:none;font-weight:300}
+.post-subscribe-form input::placeholder{color:var(--ink-faint)}
+.post-subscribe-form input:-webkit-autofill{-webkit-box-shadow:0 0 0 100px var(--bg) inset;-webkit-text-fill-color:var(--ink)}
+.post-subscribe-form button{padding:.85rem 1.4rem;background:var(--ink);color:var(--bg);border:none;font-family:var(--sans);font-size:.72rem;letter-spacing:.12em;text-transform:uppercase;cursor:pointer;transition:opacity .2s}
+.post-subscribe-form button:hover{opacity:.75}
+.post-subscribe-msg{margin-top:1rem;font-size:.82rem;min-height:1rem}
+.post-subscribe-msg.ok{color:#4a7c59}
+.post-subscribe-msg.err{color:#a0522d}
+
+/* ── ADMIN ── */
+.admin-wrap{min-height:100vh;background:var(--bg);padding:5rem 3rem 4rem;max-width:760px;margin:0 auto}
+.admin-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:3rem;padding-bottom:2rem;border-bottom:1px solid var(--rule)}
+.admin-title{font-family:var(--wordmark);font-size:2.5rem;color:var(--ink)}
+.admin-logout{font-size:.72rem;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-faint);cursor:pointer;background:none;border:none;font-family:var(--sans);transition:color .2s}
+.admin-logout:hover{color:var(--ink)}
+.admin-tabs{display:flex;margin-bottom:3rem;border-bottom:1px solid var(--rule)}
+.admin-tab{font-size:.75rem;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-faint);cursor:pointer;background:none;border:none;border-bottom:2px solid transparent;padding:.8rem 1.5rem .8rem 0;margin-bottom:-1px;font-family:var(--sans);transition:color .2s}
+.admin-tab.active{color:var(--ink);border-bottom-color:var(--ink)}
+.admin-tab:hover{color:var(--ink)}
+.admin-panel{display:none}
+.admin-panel.active{display:block}
+.admin-field{margin-bottom:1.5rem}
+.admin-field label{display:block;font-size:.68rem;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-faint);margin-bottom:.5rem}
+.admin-field input,.admin-field textarea{width:100%;padding:.85rem 1rem;background:#fff;border:1px solid var(--rule);font-family:var(--sans);font-size:.9rem;color:var(--ink);outline:none;font-weight:300;resize:vertical;transition:border-color .2s}
+.admin-field input:focus,.admin-field textarea:focus{border-color:var(--ink-soft)}
+.admin-field textarea{min-height:220px;line-height:1.6}
+.admin-submit{padding:.9rem 2.5rem;background:var(--ink);color:var(--bg);border:none;font-family:var(--sans);font-size:.75rem;letter-spacing:.12em;text-transform:uppercase;cursor:pointer;transition:opacity .2s;margin-top:.5rem}
+.admin-submit:hover{opacity:.7}
+.admin-submit:disabled{opacity:.4;cursor:not-allowed}
+.admin-msg{margin-top:1rem;font-size:.82rem;min-height:1.2rem}
+.admin-msg.ok{color:#4a7c59}
+.admin-msg.err{color:#a0522d}
+.admin-list{margin-top:3rem}
+.admin-list-title{font-size:.68rem;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-faint);margin-bottom:1.5rem;display:flex;align-items:center;gap:1rem}
+.admin-list-title::after{content:'';flex:1;height:1px;background:var(--rule)}
+.admin-item{display:flex;align-items:center;justify-content:space-between;padding:1rem 0;border-bottom:1px solid var(--rule);gap:1rem}
+.admin-item-info{flex:1;min-width:0}
+.admin-item-title{font-family:var(--serif);font-size:1.1rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.admin-item-date{font-size:.72rem;color:var(--ink-faint);margin-top:.2rem}
+.admin-item-thumb{width:48px;height:48px;object-fit:cover;flex-shrink:0}
+.admin-delete{font-size:.65rem;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-faint);cursor:pointer;background:none;border:none;font-family:var(--sans);flex-shrink:0;transition:color .2s}
+.admin-delete:hover{color:#a0522d}
+.upload-area{border:1px dashed var(--rule);padding:2rem;text-align:center;cursor:pointer;transition:border-color .2s}
+.upload-area:hover{border-color:var(--ink-soft)}
+.upload-area input{display:none}
+.upload-area-text{font-size:.78rem;letter-spacing:.08em;color:var(--ink-faint);text-transform:uppercase}
+.upload-preview{margin-top:1rem;max-width:200px;max-height:200px;object-fit:cover;display:none}
+
+/* ── LOGIN ── */
+.login-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:1.5rem;padding:2rem}
+.login-logo{font-family:var(--wordmark);font-size:3rem;color:var(--ink);margin-bottom:1rem}
+.login-sub{font-size:.72rem;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-faint)}
+.login-field{width:100%;max-width:340px}
+.login-field label{display:block;font-size:.68rem;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-faint);margin-bottom:.5rem}
+.login-field input{width:100%;padding:.9rem 1.1rem;background:transparent;border:1px solid var(--rule);font-family:var(--sans);font-size:.9rem;color:var(--ink);outline:none;font-weight:300;margin-bottom:1rem;transition:border-color .2s}
+.login-field input:focus{border-color:var(--ink)}
+.login-btn{width:100%;max-width:340px;padding:.9rem;background:var(--ink);color:var(--bg);border:none;font-family:var(--sans);font-size:.75rem;letter-spacing:.12em;text-transform:uppercase;cursor:pointer;transition:opacity .2s}
+.login-btn:hover{opacity:.75}
+.login-btn:disabled{opacity:.4;cursor:not-allowed}
+.login-err{font-size:.78rem;color:#a0522d;min-height:1rem;max-width:340px;text-align:center}
+
+/* ── CURSOR ── */
+.cursor{width:6px;height:6px;background:var(--ink);border-radius:50%;position:fixed;pointer-events:none;z-index:9999;transform:translate(-50%,-50%);transition:width .2s,height .2s,opacity .2s;mix-blend-mode:multiply}
+.cursor.big{width:36px;height:36px;opacity:.12}
+
+/* ── ANIMATIONS ── */
+@keyframes rise{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.sidebar{animation:rise .5s cubic-bezier(.22,1,.36,1) both}
+.right-pane{animation:rise .5s cubic-bezier(.22,1,.36,1) .12s both}
+
+/* ── RESPONSIVE ── */
+@media(max-width:820px){
+  :root{--sidebar-w:100%}
+  .split-layout{grid-template-columns:1fr}
+  .sidebar{position:relative;width:100%;padding:2rem 1.5rem}
+  .right-pane{margin-left:0}
+  .main-tab{padding:2rem 1.5rem 4rem}
+  .archive-grid{grid-template-columns:repeat(2,1fr)}
+  .post-full-wrap{padding:3rem 1.5rem 4rem}
+  .admin-wrap{padding:3rem 1.5rem 3rem}
+  .sidebar-tabs{padding-bottom:1.2rem}
+}
+</style>
+</head>
+<body>
+
+<div class="cursor" id="cursor"></div>
+
+<!-- ════ HOME (split layout) ════ -->
+<div id="page-home" class="page active">
+  <div class="split-layout">
+
+    <!-- SIDEBAR -->
+    <aside class="sidebar">
+      <div class="sidebar-wordmark" onclick="showMain('posts')">pski</div>
+      <div class="sidebar-rule"></div>
+      <p class="sidebar-bio">A study in taste, leverage, and how to live.</p>
+      <p class="sidebar-subtext">Notes on business, philosophy, and the aesthetics of life.</p>
+
+      <div class="sidebar-tabs">
+        <button class="sidebar-tab" id="tab-archive" onclick="showMain('archive', this)">Archive</button>
+        <button class="sidebar-tab active" id="tab-posts" onclick="showMain('posts', this)">Posts</button>
+      </div>
+
+      <div class="sidebar-rule" style="margin-top:auto;margin-bottom:1.4rem"></div>
+      <input type="email" class="sidebar-sub-input" id="sub-email" placeholder="your@email.com" autocomplete="off" onkeydown="if(event.key==='Enter')doSubscribe()" />
+      <button class="sidebar-sub-btn" onclick="doSubscribe()">I'm in</button>
+      <p class="sidebar-sub-msg" id="sub-msg"></p>
+    </aside>
+
+    <!-- RIGHT PANE -->
+    <main class="right-pane">
+
+      <!-- Posts -->
+      <div id="main-posts" class="main-tab active">
+        <div class="posts-list" id="home-posts"><p class="empty-state">Loading…</p></div>
+      </div>
+
+      <!-- Archive -->
+      <div id="main-archive" class="main-tab">
+        <div class="archive-grid" id="home-archive"></div>
+      </div>
+
+    </main>
+  </div>
+</div>
+
+<!-- ════ SINGLE POST ════ -->
+<div id="page-post" class="page">
+  <div class="post-full-wrap">
+    <button class="post-full-back" onclick="showPage('home')"><span style="font-size:1rem;line-height:1">←</span> All writing</button>
+    <p class="post-full-date" id="pf-date"></p>
+    <h1 class="post-full-title" id="pf-title"></h1>
+    <div class="post-full-content" id="pf-content"></div>
+    <div class="post-subscribe">
+      <h3 class="post-subscribe-title">Get the writing.</h3>
+      <p class="post-subscribe-desc">Notes from someone paying attention. No schedule — just writing when something's actually worth your time.</p>
+      <div class="post-subscribe-form">
+        <input type="email" id="ps-email" placeholder="your@email.com" autocomplete="off" onkeydown="if(event.key==='Enter')doPostSubscribe()" />
+        <button type="button" id="ps-btn" onclick="doPostSubscribe()">I'm in</button>
+      </div>
+      <p class="post-subscribe-msg" id="ps-msg"></p>
+    </div>
+  </div>
+</div>
+
+<!-- ════ ADMIN LOGIN ════ -->
+<div id="page-admin-login" class="page">
+  <div class="login-wrap">
+    <div class="login-logo">pski</div>
+    <p class="login-sub">Admin</p>
+    <div class="login-field">
+      <label>Email</label>
+      <input type="email" id="login-email" placeholder="your@email.com" onkeydown="if(event.key==='Enter')document.getElementById('login-pw').focus()" />
+      <label>Password</label>
+      <input type="password" id="login-pw" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()" />
+    </div>
+    <button class="login-btn" id="login-btn" onclick="doLogin()">Sign In</button>
+    <p class="login-err" id="login-err"></p>
+  </div>
+</div>
+
+<!-- ════ ADMIN DASHBOARD ════ -->
+<div id="page-admin" class="page">
+  <div class="admin-wrap">
+    <div class="admin-header">
+      <span class="admin-title">pski</span>
+      <button class="admin-logout" onclick="doLogout()">Log out</button>
+    </div>
+    <div class="admin-tabs">
+      <button class="admin-tab active" onclick="switchTab('posts',this)">New Post</button>
+      <button class="admin-tab" onclick="switchTab('photos',this)">New Photo</button>
+      <button class="admin-tab" onclick="switchTab('manage',this)">Manage</button>
+    </div>
+    <div class="admin-panel active" id="admin-posts">
+      <div class="admin-field"><label>Title</label><input type="text" id="p-title" placeholder="Post title…" /></div>
+      <div class="admin-field"><label>Excerpt</label><textarea id="p-excerpt" style="min-height:80px" placeholder="Short teaser shown on home page…"></textarea></div>
+      <div class="admin-field"><label>Content</label><textarea id="p-content" placeholder="Write your post here…&#10;&#10;Separate paragraphs with a blank line."></textarea></div>
+      <button class="admin-submit" id="p-btn" onclick="submitPost()">Publish Post</button>
+      <p class="admin-msg" id="p-msg"></p>
+    </div>
+    <div class="admin-panel" id="admin-photos">
+      <div class="admin-field">
+        <label>Photo</label>
+        <div class="upload-area" onclick="document.getElementById('ph-file').click()">
+          <input type="file" id="ph-file" accept="image/*" onchange="previewPhoto(event)" />
+          <p class="upload-area-text">Click to upload a photo</p>
+          <img id="ph-preview" class="upload-preview" />
+        </div>
+      </div>
+      <div class="admin-field"><label>Caption (optional)</label><input type="text" id="ph-caption" placeholder="A note about this image…" /></div>
+      <button class="admin-submit" id="ph-btn" onclick="submitPhoto()">Publish Photo</button>
+      <p class="admin-msg" id="ph-msg"></p>
+    </div>
+    <div class="admin-panel" id="admin-manage">
+      <div class="admin-list"><p class="admin-list-title">Posts</p><div id="m-posts"></div></div>
+      <div class="admin-list" style="margin-top:3rem"><p class="admin-list-title">Photos</p><div id="m-photos"></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- LIGHTBOX -->
+<div class="lightbox" id="lightbox" onclick="closeLightbox()">
+  <div class="lightbox-inner" onclick="event.stopPropagation()">
+    <button class="lightbox-close" onclick="closeLightbox()">Close ✕</button>
+    <img class="lightbox-img" id="lb-img" src="" alt="" />
+    <span class="lightbox-caption" id="lb-caption"></span>
+  </div>
+</div>
+
+<script>
+const { createClient } = supabase;
+const sb = createClient(
+  'https://iwabxlrvlbdgufkyrtdt.supabase.co',
+  'sb_publishable_JnY3E9PKRtefe3vUMLKxJA_nQ_2k5Fr'
+);
+
+const postCache = {};
+
+// ── Cursor
+const cursor = document.getElementById('cursor');
+document.addEventListener('mousemove', e => { cursor.style.left=e.clientX+'px'; cursor.style.top=e.clientY+'px'; });
+document.addEventListener('mouseover', e => { if(e.target.matches('a,button,[onclick],[cursor=pointer]')) cursor.classList.add('big'); });
+document.addEventListener('mouseout', () => cursor.classList.remove('big'));
+
+// ── Page system
+function showPage(id) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById('page-'+id).classList.add('active');
+  window.scrollTo({top:0, behavior:'smooth'});
+  if (id === 'admin') loadManage();
+}
+
+// ── Main tab switcher (Posts / Archive within home page)
+function showMain(name, btn) {
+  // Ensure home page is active
+  if (!document.getElementById('page-home').classList.contains('active')) {
+    showPage('home');
+  }
+  // Switch tabs
+  document.querySelectorAll('.main-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('main-'+name).classList.add('active');
+  // Update tab styles
+  document.querySelectorAll('.sidebar-tab').forEach(t => t.classList.remove('active'));
+  const activeBtn = btn || document.getElementById('tab-'+name);
+  if (activeBtn) activeBtn.classList.add('active');
+  // Load data
+  if (name === 'archive') loadHomeArchive();
+  if (name === 'posts') loadHomePosts();
+}
+
+// ── Helpers
+function fmt(iso) { return new Date(iso).toLocaleDateString('en-US',{month:'short',day:'numeric'}); }
+function fmtFull(iso) { return new Date(iso).toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'}); }
+
+// ── Load posts (all, newest first)
+async function loadHomePosts() {
+  const el = document.getElementById('home-posts');
+  if (el.dataset.loaded) return; // don't re-fetch
+  const {data} = await sb.from('posts').select('*').order('published_at',{ascending:false});
+  if (!data?.length) { el.innerHTML='<p class="empty-state">No posts yet.</p>'; return; }
+  data.forEach(p => postCache[p.id] = p);
+  el.innerHTML = data.map(p=>`<div class="post-item" onclick="openPost('${p.id}')"><span class="post-date">${fmt(p.published_at)}</span><div><div class="post-title">${p.title}</div><div class="post-excerpt">${p.excerpt||''}</div></div></div>`).join('');
+  el.dataset.loaded = '1';
+}
+
+// ── Open a single post
+function openPost(id) {
+  const post = postCache[id]; if (!post) return;
+  document.getElementById('pf-date').textContent = fmtFull(post.published_at);
+  document.getElementById('pf-title').textContent = post.title;
+  document.getElementById('pf-content').innerHTML = (post.content||'').split(/\n\n+/).map(p=>`<p>${p.replace(/\n/g,'<br>')}</p>`).join('');
+  showPage('post');
+}
+
+// ── Load archive photos
+async function loadHomeArchive() {
+  const el = document.getElementById('home-archive');
+  if (el.dataset.loaded) return;
+  const {data} = await sb.from('photos').select('*').order('created_at',{ascending:false});
+  if (!data?.length) { el.innerHTML='<p class="empty-state" style="grid-column:1/-1">No photos yet.</p>'; return; }
+  el.innerHTML = data.map(p=>`<div class="archive-item" onclick="openPhoto(this)" data-url="${p.url}" data-caption="${(p.caption||'')}"><img src="${p.url}" alt="${p.caption||''}" loading="lazy"/><div class="archive-caption"><span>${p.caption||''}</span></div></div>`).join('');
+  el.dataset.loaded = '1';
+}
+
+// ── Lightbox
+function openPhoto(el) {
+  document.getElementById('lb-img').src = el.dataset.url;
+  document.getElementById('lb-caption').textContent = el.dataset.caption;
+  document.getElementById('lightbox').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+function closeLightbox() {
+  document.getElementById('lightbox').classList.remove('open');
+  document.body.style.overflow = '';
+}
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeLightbox(); });
+
+// ── Auth
+async function doLogin() {
+  const email = document.getElementById('login-email').value.trim();
+  const pw = document.getElementById('login-pw').value;
+  const btn = document.getElementById('login-btn');
+  const err = document.getElementById('login-err');
+  if (!email || !pw) { err.textContent='Enter your email and password.'; return; }
+  btn.disabled=true; btn.textContent='Signing in…';
+  const {error} = await sb.auth.signInWithPassword({email, password:pw});
+  btn.disabled=false; btn.textContent='Sign In';
+  if (error) { err.textContent=error.message; return; }
+  err.textContent='';
+  showPage('admin');
+}
+async function doLogout() {
+  await sb.auth.signOut();
+  showPage('home');
+}
+
+// ── Admin tabs
+function switchTab(name, btn) {
+  document.querySelectorAll('.admin-tab').forEach(t=>t.classList.remove('active'));
+  btn.classList.add('active');
+  document.querySelectorAll('.admin-panel').forEach(p=>p.classList.remove('active'));
+  document.getElementById('admin-'+name).classList.add('active');
+  if (name==='manage') loadManage();
+}
+
+// ── Submit post
+async function submitPost() {
+  const title = document.getElementById('p-title').value.trim();
+  const excerpt = document.getElementById('p-excerpt').value.trim();
+  const content = document.getElementById('p-content').value.trim();
+  const btn = document.getElementById('p-btn');
+  const msg = document.getElementById('p-msg');
+  if (!title) { msg.textContent='Title is required.'; msg.className='admin-msg err'; return; }
+  btn.disabled=true; btn.textContent='Publishing…';
+  const {error} = await sb.from('posts').insert({title,excerpt,content});
+  btn.disabled=false; btn.textContent='Publish Post';
+  if (error) { msg.textContent='Error: '+error.message; msg.className='admin-msg err'; }
+  else {
+    msg.textContent='Published ✓'; msg.className='admin-msg ok';
+    document.getElementById('p-title').value='';
+    document.getElementById('p-excerpt').value='';
+    document.getElementById('p-content').value='';
+    // Invalidate cache so posts reload
+    const el = document.getElementById('home-posts');
+    delete el.dataset.loaded;
+    setTimeout(()=>msg.textContent='',3000);
+  }
+}
+
+// ── Submit photo
+function previewPhoto(e) {
+  const file = e.target.files[0]; if(!file) return;
+  const prev = document.getElementById('ph-preview');
+  prev.src=URL.createObjectURL(file); prev.style.display='block';
+}
+async function submitPhoto() {
+  const file = document.getElementById('ph-file').files[0];
+  const caption = document.getElementById('ph-caption').value.trim();
+  const btn = document.getElementById('ph-btn');
+  const msg = document.getElementById('ph-msg');
+  if (!file) { msg.textContent='Please select a photo.'; msg.className='admin-msg err'; return; }
+  btn.disabled=true; btn.textContent='Uploading…';
+  const ext = file.name.split('.').pop();
+  const path = Date.now()+'.'+ext;
+  const {error:upErr} = await sb.storage.from('photos').upload(path,file);
+  if (upErr) { msg.textContent='Upload error: '+upErr.message; msg.className='admin-msg err'; btn.disabled=false; btn.textContent='Publish Photo'; return; }
+  const {data:urlData} = sb.storage.from('photos').getPublicUrl(path);
+  const {error:dbErr} = await sb.from('photos').insert({url:urlData.publicUrl,caption});
+  btn.disabled=false; btn.textContent='Publish Photo';
+  if (dbErr) { msg.textContent='Error: '+dbErr.message; msg.className='admin-msg err'; }
+  else {
+    msg.textContent='Published ✓'; msg.className='admin-msg ok';
+    document.getElementById('ph-file').value='';
+    document.getElementById('ph-caption').value='';
+    document.getElementById('ph-preview').style.display='none';
+    delete document.getElementById('home-archive').dataset.loaded;
+    setTimeout(()=>msg.textContent='',3000);
+  }
+}
+
+// ── Manage
+async function loadManage() {
+  const [{data:posts},{data:photos}] = await Promise.all([
+    sb.from('posts').select('*').order('published_at',{ascending:false}),
+    sb.from('photos').select('*').order('created_at',{ascending:false})
+  ]);
+  document.getElementById('m-posts').innerHTML = posts?.length
+    ? posts.map(p=>`<div class="admin-item"><div class="admin-item-info"><div class="admin-item-title">${p.title}</div><div class="admin-item-date">${fmt(p.published_at)}</div></div><button class="admin-delete" onclick="delPost('${p.id}')">Delete</button></div>`).join('')
+    : '<p style="font-size:.82rem;color:var(--ink-faint);padding:1rem 0">No posts yet.</p>';
+  document.getElementById('m-photos').innerHTML = photos?.length
+    ? photos.map(p=>`<div class="admin-item"><img class="admin-item-thumb" src="${p.url}"/><div class="admin-item-info"><div class="admin-item-title" style="font-family:var(--sans);font-size:.85rem">${p.caption||'(no caption)'}</div><div class="admin-item-date">${fmt(p.created_at)}</div></div><button class="admin-delete" onclick="delPhoto('${p.id}')">Delete</button></div>`).join('')
+    : '<p style="font-size:.82rem;color:var(--ink-faint);padding:1rem 0">No photos yet.</p>';
+}
+async function delPost(id) {
+  if(!confirm('Delete this post?'))return;
+  await sb.from('posts').delete().eq('id',id);
+  delete document.getElementById('home-posts').dataset.loaded;
+  loadManage();
+}
+async function delPhoto(id) {
+  if(!confirm('Delete this photo?'))return;
+  await sb.from('photos').delete().eq('id',id);
+  delete document.getElementById('home-archive').dataset.loaded;
+  loadManage();
+}
+
+// ── Subscribe (sidebar)
+async function doSubscribe() {
+  const email = document.getElementById('sub-email').value.trim();
+  const btn = document.querySelector('.sidebar-sub-btn');
+  const msg = document.getElementById('sub-msg');
+  if (!email) { msg.className='sidebar-sub-msg err'; msg.textContent='Enter your email.'; return; }
+  btn.disabled=true; btn.textContent='…';
+  const {error} = await sb.from('subscribers').insert({email});
+  btn.disabled=false; btn.textContent="I'm in";
+  if (error?.code === '23505') { msg.className='sidebar-sub-msg'; msg.textContent='Already subscribed.'; }
+  else if (error) { msg.className='sidebar-sub-msg err'; msg.textContent='Something went wrong.'; }
+  else { msg.className='sidebar-sub-msg ok'; msg.textContent="You're in."; document.getElementById('sub-email').value=''; }
+  setTimeout(()=>msg.textContent='', 4000);
+}
+
+// ── Subscribe (post page)
+async function doPostSubscribe() {
+  const email = document.getElementById('ps-email').value.trim();
+  const btn = document.getElementById('ps-btn');
+  const msg = document.getElementById('ps-msg');
+  if (!email) { msg.className='post-subscribe-msg err'; msg.textContent='Enter your email.'; return; }
+  btn.disabled=true; btn.textContent='…';
+  const {error} = await sb.from('subscribers').insert({email});
+  btn.disabled=false; btn.textContent="I'm in";
+  if (error?.code === '23505') { msg.className='post-subscribe-msg'; msg.style.color='var(--ink-faint)'; msg.textContent='Already subscribed.'; }
+  else if (error) { msg.className='post-subscribe-msg err'; msg.textContent='Something went wrong.'; }
+  else { msg.className='post-subscribe-msg ok'; msg.textContent="You're in."; document.getElementById('ps-email').value=''; }
+  setTimeout(()=>msg.textContent='', 4000);
+}
+
+// ── Route: pski.fun/#admin
+async function checkRoute() {
+  if (window.location.hash === '#admin') {
+    const {data:{session}} = await sb.auth.getSession();
+    if (session) { showPage('admin'); loadManage(); }
+    else { showPage('admin-login'); }
+  }
+}
+window.addEventListener('hashchange', checkRoute);
+checkRoute();
+
+// ── Init
+loadHomePosts();
+</script>
+</body>
+</html>
